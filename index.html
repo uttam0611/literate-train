@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Lottery Ticket Confirmation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+  <style>
+    :root {
+      
+      --primary:#2563eb; --primary-dark:#1e40af; --bg:solid white; --card:#e9e6e1; --text:black;
+      --muted:#9ca3af; --success:#10b981; --danger:#ef4444; --warn:#f59e0b;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:black;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#426074;border-bottom:1px solid#0b1220;position:sticky;top:0;z-index:20}
+    .brand{font-weight:700}
+    .tabs{display:flex;gap:8px;flex-wrap:wrap}
+    .tab-btn{padding:8px 12px;border:1px solid #1f2937;background:white;color:var(--text);border-radius:8px;cursor:pointer}
+    .tab-btn.active{background:var(--primary);border-color:solid black}
+    .clock{font-variant-numeric:tabular-nums;color:solid black;}
+    main{padding:16px;max-width:1200px;margin:0 auto}
+    .panel{background:var(--card);border:3px solid black;border-radius:12px;padding:16px}
+    .panel h2{margin:0 0 10px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    @media (max-width:900px){.row{grid-template-columns:1fr}}
+    .session{margin-bottom:16px;padding:12px;border:1px dashed #1f2937;border-radius:10px}
+     
+    .grid{display:grid;grid-template-columns:repeat(10,1fr);gap:8px}
+    .slot{background:rgb(13, 115, 232);border:1px solid #1f2937;border-radius:10px;padding:44px 44px;text-align:center;cursor:pointer;font-weight:700}
+    .slot.free:hover{border-color:var(--primary)}
+    .slot.booked{background:#cf3412;border-color:#23344e;position:relative}
+    .slot.booked::after{content:"Booked";position:absolute;top:6px;right:12px;font-size:20px;color:black}
+    .modal-backdrop{position:fixed;inset:0;background:rgba(7, 7, 7, 0.5);display:none;align-items:center;justify-content:center;z-index:50}
+    .modal{background:var(--card);border:10px solid #0c69d4;border-radius:12px;width:95%;max-width:540px;padding:16px}
+    .field{margin-bottom:12px}
+    .label{font-size:12px;color:solid black;margin-bottom:6px}
+    input,select{width:100%;padding:10px;border-radius:8px;border:1px solid #374151;background:whitesmoke;color:var(--text)}
+    .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+    .btn{padding:10px 12px;border-radius:8px;border:1px solid transparent;cursor:pointer;font-weight:700;background:white;color:var(--text)}
+    .btn.primary{background:var(--primary);border-color:var(--primary)}
+    .btn.primary:hover{background:var(--primary-dark)}
+    .btn.success{background:var(--success);border-color:var(--success);color:#062a23}
+    .btn.danger{background:var(--danger);border-color:var(--danger)}
+    .btn.warn{background:var(--warn);border-color:var(--warn);color:#1f1300}
+    .draw-wrap{display:grid;gap:100px}
+    .reels{display:flex;gap:8px;justify-content:center}
+    .reel{width:56px;height:96px;border-radius:10px;border:1px solid black;background: whitesmoke;display:flex;align-items:center;justify-content:center;font-size:64px;font-weight:700;}
+    .draw-ctrl{display:flex;gap:8px;justify-content:center}
+    .note{font-size:12px;color:black;text-align:center}
+    .receipt{background:rgb(18, 102, 166);border:1px solid #1f2937;border-radius:12px;padding:12px}
+    .kv{display:grid;grid-template-columns:160px 1fr;gap:6px}
+    .kv .k{color:black}
+    .qr{display:flex;gap:16px;align-items:center;margin-top:10px}
+    table{width: 100px;border-collapse:collapse}
+    th,td{border-bottom:1px solid #1f2937;padding:8px;text-align:left}
+    th{color:black}
+    .toast{position:fixed;right:12px;bottom:12px;background:#0b1220;border:1px solid #1f2937;padding:10px 12px;border-radius:8px;display:none;z-index:60}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">Lottery Ticket Confirmation</div>
+    <div class="tabs">
+      <button class="tab-btn" data-tab="dashboard">Dashboard</button>
+      <button class="tab-btn" data-tab="draw">Draw</button>
+      <button class="tab-btn" data-tab="booking">Booking</button>
+      <button class="tab-btn" data-tab="receipts">Receipts</button>
+      <button class="tab-btn" data-tab="reports">Reports</button>
+      <button class="tab-btn" data-tab="search">Search</button>
+      <button class="tab-btn" data-tab="settings">Settings</button>
+    </div>
+    <div class="clock" id="clock"></div>
+  </header>
+
+  <main>
+    <div id="dashboard" class="panel">
+      <h2>Dashboard & slots</h2>
+      <div id="sessions"></div>
+    </div>
+
+    <div id="draw" class="panel" style="display:none">
+      <center>
+      <h1>Ticket Confirm machine</h1>
+      </center>
+      <hr>
+      <br>
+      <br>
+      <br>
+      <div class="draw-wrap">
+        <div class="reels" id="reels"></div>
+        <div class="draw-ctrl">
+          <input type="text" id="inputTarget" maxlength="5" placeholder="Enter 5-digit number" />
+          <button class="btn primary" id="btnSpin">Spin to number</button>
+          <button class="btn success" id="btnProceed">Proceed to booking</button>
+        </div>
+        <div class="note">Type a 5-digit number. Reels land exactly on it with sound.</div>
+      </div>
+    </div>
+
+    <div id="booking" class="panel" style="display:none">
+      <h2>Final booking & payment</h2>
+      <div class="row">
+        <div>
+          <div class="field"><div class="label">Customer name</div><input id="bkName" type="text" /></div>
+          <div class="field"><div class="label">Customer phone</div><input id="bkPhone" type="tel" /></div>
+          <div class="field"><div class="label">Department / internal info</div><input id="bkDept" type="text" /></div>
+          <div class="field"><div class="label">Ticket number (from draw)</div><input id="bkNumber" type="text" maxlength="5" /></div>
+          <div class="field">
+            <div class="label">Sem category</div>
+            <select id="bkSem">
+              <option value="5">5 Sem</option><option value="10">10 Sem</option>
+              <option value="25">25 Sem</option><option value="50">50 Sem</option>
+              <option value="100">100 Sem</option><option value="200">200 Sem</option>
+            </select>
+          </div>
+          <div class="field"><div class="label">Amount (auto from settings; editable)</div><input id="bkAmount" type="number" /></div>
+          <div class="actions">
+            <button class="btn warn" id="btnCancelBooking">Cancel booking</button>
+            <button class="btn success" id="btnConfirmPayment">Confirm payment</button>
+          </div>
+        </div>
+        <div>
+          <div class="receipt" id="previewReceipt">
+            <div style="font-weight:700;margin-bottom:8px">Receipt preview</div>
+            <div class="kv">
+              <div class="k">Customer</div><div id="rvCustomer">—</div>
+              <div class="k">Phone</div><div id="rvPhone">—</div>
+              <div class="k">Department</div><div id="rvDept">—</div>
+              <div class="k">Ticket number</div><div id="rvNumber">—</div>
+              <div class="k">Sem</div><div id="rvSem">—</div>
+              <div class="k">Amount</div><div id="rvAmount">—</div>
+              <div class="k">Session</div><div id="rvSession">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="receipts" class="panel" style="display:none">
+      <h2>Receipts</h2>
+      <div id="receiptList"></div>
+    </div>
+
+    <div id="reports" class="panel" style="display:none">
+      <h2>Daily sales report</h2>
+      <div id="reportContent"></div>
+    </div>
+
+    <div id="search" class="panel" style="display:none">
+      <h2>Search & archive</h2>
+      <div class="row">
+        <div>
+          <div class="field"><div class="label">Search by phone</div><input id="searchPhone" type="tel" /></div>
+          <div class="field"><div class="label">Search by ticket number</div><input id="searchTicket" type="text" maxlength="5" /></div>
+          <div class="actions">
+            <button class="btn primary" id="btnSearch">Search</button>
+            <button class="btn" id="btnClearSearch">Clear</button>
+          </div>
+        </div>
+        <div><div id="searchResults"></div></div>
+      </div>
+    </div>
+
+    <div id="settings" class="panel" style="display:none">
+      <h2>Settings</h2>
+      <div class="row">1
+        <div>
+          <div class="field">
+            <div class="label">Pricing per Sem (INR)</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+              <div><div class="label">5 Sem</div><input id="price5" type="number" /></div>
+              <div><div class="label">10 Sem</div><input id="price10" type="number" /></div>
+              <div><div class="label">25 Sem</div><input id="price25" type="number" /></div>
+              <div><div class="label">50 Sem</div><input id="price50" type="number" /></div>
+              <div><div class="label">100 Sem</div><input id="price100" type="number" /></div>
+              <div><div class="label">200 Sem</div><input id="price200" type="number" /></div>
+            </div>
+          </div>
+          <div class="field">
+            <div class="label">Enable SMS (simulated)</div>
+            <select id="smsEnabled"><option value="true">Enabled</option><option value="false">Disabled</option></select>
+          </div>
+          <div class="field">
+            <div class="label">Clock offset (HH:MM, + or -)</div>
+            <input id="clockOffset" type="text" placeholder="+00:00" />
+          </div>
+          <div class="actions">
+            <button class="btn primary" id="btnSaveSettings">Save settings</button>
+            <button class="btn danger" id="btnResetApp">Reset app data</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="modal-backdrop" id="modalBackdrop">
+    <div class="modal">
+      <h3 id="modalTitle">Book slot</h3>
+      <div id="modalBody">
+        <div class="field"><div class="label">Customer name</div><input id="modalName" type="text" /></div>
+        <div class="field"><div class="label">Phone number</div><input id="modalPhone" type="tel" /></div>
+        <div class="field"><label><input id="modalAgree" type="checkbox" /> I confirm the terms</label></div>
+      </div>
+      <div class="actions" id="modalActions">
+        <button class="btn" id="btnCloseModal">Close</button>
+        <button class="btn primary" id="btnSaveSlot">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <audio id="tickAudio">
+    <source src="data:audio/wav;base64,UklGRmQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQA8AAAAP///wD//wD//wD//wD//wD//wD//wD//wD//wD//wD//wD//wAAAP///wD//wD//wD//wD//wD//wD//wD//wD//wD//wD//wD//w==" type="audio/wav">
+  </audio>
+
+  <script>
+    const $ = s => document.querySelector(s);
+    const el = (t, p={}, ...c) => { const n=document.createElement(t); Object.entries(p).forEach(([k,v])=>k==='class'?n.className=v:n.setAttribute(k,v)); c.forEach(x=>n.append(x)); return n; };
+    const toast = m => { const t=$('#toast'); t.textContent=m; t.style.display='block'; setTimeout(()=>t.style.display='none',2500); };
+    const uuid = () => 'xxxxxx-xxxx-4xxx-yxxx-xxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);});
+
+    const SESSIONS = [{id:'13:00',label:'1:00 PM'},{id:'18:00',label:'6:00 PM'},{id:'20:00',label:'8:00 PM'}];
+    const SLOT_COUNT = 10;
+    const defaults = { prices:{5:50,10:90,25:200,50:380,100:700,200:1300}, smsEnabled:true, clockOffset:'+00:00' };
+
+    const store = {
+      load() {
+        const d = JSON.parse(localStorage.getItem('lottery-app')||'{}');
+        d.settings = d.settings || defaults;
+        d.sessions = d.sessions || {};
+        SESSIONS.forEach(s => { if (!d.sessions[s.id]) d.sessions[s.id] = Array.from({length:SLOT_COUNT}).map(()=>null); });
+        d.receipts = d.receipts || [];
+        localStorage.setItem('lottery-app', JSON.stringify(d));
+        return d;
+      },
+      save(d){ localStorage.setItem('lottery-app', JSON.stringify(d)); }
+    };
+    let app = store.load();
+
+    const parseOffset = str => {
+      if (!str || !/^[+-]\d{2}:\d{2}$/.test(str)) return 0;
+      const sign = str[0]==='+'?1:-1; const [hh,mm]=str.slice(1).split(':').map(Number);
+      return sign*((hh*60+mm)*60*1000);
+    };
+    let clockOffsetMs = parseOffset(app.settings.clockOffset);
+    const updateClock = () => {
+      const now = new Date(Date.now()+clockOffsetMs);
+      const p = n => String(n).padStart(2,'0');
+      $('#clock').textContent = `${p(now.getDate())}-${p(now.getMonth()+1)}-${now.getFullYear()} ${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`;
+    };
+    setInterval(updateClock, 250); updateClock();
+
+    const setTab = id => {
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===id));
+      ['dashboard','draw','booking','receipts','reports','search','settings'].forEach(v=>document.getElementById(v).style.display = v===id?'block':'none');
+      render(id);
+    };
+    document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>setTab(b.dataset.tab)));
+
+    const renderSessions = () => {
+      const wrap = $('#sessions'); wrap.innerHTML='';
+      SESSIONS.forEach(s=>{
+        const sec = el('div',{class:'session'});
+        sec.append(el('h3',{},`Session: ${s.label}`));
+        const grid = el('div',{class:'grid'});
+        app.sessions[s.id].forEach((slot, idx)=>{
+          const cell = el('div',{class:`slot ${slot?'booked':'free'}`}, (idx+1).toString());
+          cell.addEventListener('click', ()=> slot ? manageSlot(s.id, idx, slot) : bookSlot(s.id, idx));
+          grid.append(cell);
+        });
+        sec.append(grid); wrap.append(sec);
+      });
+    };
+
+    const closeModal = () => { $('#modalBackdrop').style.display='none'; $('#modalActions').innerHTML=''; $('#modalBody').innerHTML=''; };
+    $('#btnCloseModal').addEventListener('click', closeModal);
+
+    const bookSlot = (sessionId, slotIndex) => {
+      $('#modalTitle').textContent = `Book slot #${slotIndex+1} (${SESSIONS.find(x=>x.id===sessionId).label})`;
+      $('#modalBody').innerHTML = `
+        <div class="field"><div class="label">Customer name</div><input id="modalName" type="text" /></div>
+        <div class="field"><div class="label">Phone number</div><input id="modalPhone" type="tel" /></div>
+        <div class="field"><label><input id="modalAgree" type="checkbox" /> I confirm the terms</label></div>
+      `;
+      const actions = $('#modalActions'); actions.innerHTML='';
+      const btnClose = el('button',{class:'btn'},'Close'); btnClose.onclick=closeModal; actions.append(btnClose);
+      const btnSave = el('button',{class:'btn primary'},'Save'); btnSave.onclick=()=>{
+        const name = document.getElementById('modalName').value.trim();
+        const phone = document.getElementById('modalPhone').value.trim();
+        const agree = document.getElementById('modalAgree').checked;
+        if (!name || !phone || !agree) { toast('Fill name, phone, and confirm terms.'); return; }
+        app.sessions[sessionId][slotIndex] = { name, phone, agree, bookedAt: Date.now() };
+        store.save(app); closeModal(); renderSessions(); toast('Slot booked.');
+      };
+      actions.append(btnSave);
+      $('#modalBackdrop').style.display='flex';
+    };
+
+    const manageSlot = (sessionId, slotIndex, slotData) => {
+      $('#modalTitle').textContent = `Manage slot #${slotIndex+1} (${SESSIONS.find(x=>x.id===sessionId).label})`;
+      $('#modalBody').innerHTML = `
+        <div class="kv">
+          <div class="k">Customer</div><div>${slotData.name}</div>
+          <div class="k">Phone</div><div>${slotData.phone}</div>
+        </div>
+      `;
+      const actions = $('#modalActions'); actions.innerHTML='';
+      const btnClose = el('button',{class:'btn'},'Close'); btnClose.onclick=closeModal; actions.append(btnClose);
+      const btnCancel = el('button',{class:'btn danger'},'Cancel slot'); btnCancel.onclick=()=>{
+        app.sessions[sessionId][slotIndex] = null; store.save(app); closeModal(); renderSessions(); toast('Slot canceled.');
+      }; actions.append(btnCancel);
+      const btnBook = el('button',{class:'btn primary'},'Book ticket'); btnBook.onclick=()=>{
+        app.currentBooking = {
+          sessionId, slotIndex,
+          name: slotData.name, phone: slotData.phone,
+          department:'', number: app.drawTarget || '', sem:'5',
+          amount: app.settings.prices[5]
+        };
+        store.save(app); closeModal(); setTab('draw');
+      }; actions.append(btnBook);
+      $('#modalBackdrop').style.display='flex';
+    };
+
+    const reelsEl = $('#reels');
+    const initReels = () => { reelsEl.innerHTML=''; for(let i=0;i<5;i++) reelsEl.append(el('div',{class:'reel','data-i':i},'0')); };
+    initReels();
+    const tick = ()=>{ const a=$('#tickAudio'); a.currentTime=0; a.play().catch(()=>{}); };
+    const spinTo = target => {
+      if (!/^\d{5}$/.test(target)) { toast('Enter a valid 5-digit number'); return; }
+      app.drawTarget = target; store.save(app);
+      const digits = target.split('').map(d=>parseInt(d));
+      const reels = Array.from(document.querySelectorAll('.reel'));
+      reels.forEach((reel,i)=>{
+        const steps = 20 + i*5; let pos = 0;
+        const itv = setInterval(()=>{
+          reel.textContent = String(pos%10); pos++; tick();
+          if (pos>=steps){ clearInterval(itv); reel.textContent = String(digits[i]); }
+        }, 50);
+      });
+    };
+    $('#btnSpin').addEventListener('click', ()=> spinTo($('#inputTarget').value.trim()));
+    $('#btnProceed').addEventListener('click', ()=>{
+      if (!app.currentBooking) { toast('Choose a booked slot first.'); setTab('dashboard'); return; }
+      const num = app.drawTarget || $('#inputTarget').value.trim();
+      if (!/^\d{5}$/.test(num)) { toast('Enter a 5-digit number first.'); return; }
+      app.currentBooking.number = num; store.save(app); setTab('booking');
+    });
+
+    const updatePreview = () => {
+      const bk = app.currentBooking; if (!bk) return;
+      $('#rvCustomer').textContent = $('#bkName').value || '—';
+      $('#rvPhone').textContent = $('#bkPhone').value || '—';
+      $('#rvDept').textContent = $('#bkDept').value || '—';
+      $('#rvNumber').textContent = $('#bkNumber').value || '—';
+      $('#rvSem').textContent = `${$('#bkSem').value} Sem`;
+      $('#rvAmount').textContent = `₹ ${$('#bkAmount').value || 0}`;
+      $('#rvSession').textContent = SESSIONS.find(x=>x.id===bk.sessionId)?.label || '—';
+    };
+    const renderBooking = () => {
+      const bk = app.currentBooking;
+      if (!bk) { $('#booking').append(el('div',{class:'note'},'Pick a slot on Dashboard and click “Book ticket”.')); return; }
+      $('#bkName').value = bk.name || '';
+      $('#bkPhone').value = bk.phone || '';
+      $('#bkDept').value = bk.department || '';
+      $('#bkNumber').value = bk.number || '';
+      $('#bkSem').value = bk.sem || '5';
+      $('#bkAmount').value = bk.amount || app.settings.prices[bk.sem] || app.settings.prices[5];
+      updatePreview();
+    };
+    ['bkName','bkPhone','bkDept','bkNumber','bkAmount','bkSem'].forEach(id=>{
+      document.getElementById(id).addEventListener('input', updatePreview);
+      if (id==='bkSem') document.getElementById(id).addEventListener('change', ()=>{
+        const sem = $('#bkSem').value;
+        $('#bkAmount').value = app.settings.prices[sem] || 0;
+        updatePreview();
+      });
+    });
+    $('#btnCancelBooking').addEventListener('click', ()=>{ app.currentBooking=null; store.save(app); setTab('dashboard'); toast('Booking canceled.'); });
+
+    const sendSms = (phone, url) => {
+      if (!app.settings.smsEnabled) return;
+      console.log(`SMS to ${phone}: ${url}`); // integrate with gateway here
+      toast('SMS sent (simulated).');
+    };
+
+    $('#btnConfirmPayment').addEventListener('click', ()=>{
+      const bk = app.currentBooking; if (!bk) { toast('No booking in progress.'); return; }
+      const name=$('#bkName').value.trim(), phone=$('#bkPhone').value.trim(), dept=$('#bkDept').value.trim();
+      const number=$('#bkNumber').value.trim(), sem=$('#bkSem').value, amount=parseFloat($('#bkAmount').value||'0');
+      if (!name || !phone || !/^\d{5}$/.test(number) || amount<=0){ toast('Fill details correctly.'); return; }
+      const id = uuid();
+      const receipt = { id, name, phone, dept, number, sem, amount, sessionId: bk.sessionId, slotIndex: bk.slotIndex, timestamp: Date.now() };
+      app.receipts.push(receipt);
+      app.sessions[bk.sessionId][bk.slotIndex] = { ...app.sessions[bk.sessionId][bk.slotIndex], confirmed:true, receiptId:id };
+      app.currentBooking = null; store.save(app);
+      const link = `${location.origin}${location.pathname}#${'/receipt/'+id}`;
+      sendSms(phone, link);
+      toast('Payment confirmed.'); setTab('receipts'); renderReceipts();
+    });
+
+    const renderReceipts = () => {
+      const container = $('#receiptList');
+      if (!app.receipts.length){ container.innerHTML='<div class="note">No receipts yet.</div>'; return; }
+      const table = el('table',{}); const thead = el('thead',{}, el('tr',{},
+        el('th',{},'Receipt #'), el('th',{},'Customer'), el('th',{},'Phone'), el('th',{},'Ticket'),
+        el('th',{},'Sem'), el('th',{},'Amount'), el('th',{},'Session'), el('th',{},'QR')
+      ));
+      const tbody = el('tbody',{});
+      app.receipts.slice().reverse().forEach(r=>{
+        const tr = el('tr',{}); const sess = SESSIONS.find(x=>x.id===r.sessionId)?.label || '—';
+        const link = `${location.origin}${location.pathname}#${'/receipt/'+r.id}`;
+        const canvas = el('canvas',{width:80,height:80});
+        new QRious({ element: canvas, value: link, size:80, level:'M' });
+        const qrWrap = el('div',{class:'qr'}); qrWrap.append(canvas, el('a',{href:link},'Open'));
+        tr.append(el('td',{},r.id), el('td',{},r.name), el('td',{},r.phone), el('td',{},r.number),
+                 el('td',{},`${r.sem} Sem`), el('td',{},`₹ ${r.amount}`), el('td',{},sess), el('td',{},qrWrap));
+        tbody.append(tr);
+      });
+      table.append(thead, tbody); container.innerHTML=''; container.append(table);
+    };
+
+    const renderReports = () => {
+      const today = new Date(Date.now()+clockOffsetMs);
+      const start = new Date(today.getFullYear(),today.getMonth(),today.getDate()).getTime();
+      const end = start + 24*3600*1000;
+      const agg = {}; SESSIONS.forEach(s=>agg[s.id]={count:0,revenue:0});
+      app.receipts.forEach(r=>{ if (r.timestamp>=start && r.timestamp<end){ agg[r.sessionId].count++; agg[r.sessionId].revenue+=r.amount; }});
+      const div = $('#reportContent'); const table = el('table',{}); const thead = el('thead',{}, el('tr',{}, el('th',{},'Session'), el('th',{},'Tickets'), el('th',{},'Revenue (₹)')));
+      const tbody = el('tbody',{}, ...SESSIONS.map(s=> el('tr',{}, el('td',{},s.label), el('td',{},String(agg[s.id].count)), el('td',{},String(agg[s.id].revenue)))));
+      table.append(thead,tbody); div.innerHTML=''; div.append(table);
+    };
+
+    const renderSearch = () => {}; // placeholder if needed
+    $('#btnSearch').addEventListener('click', ()=>{
+      const phone=$('#searchPhone').value.trim(), ticket=$('#searchTicket').value.trim();
+      let res = app.receipts;
+      if (phone) res = res.filter(r=>r.phone.includes(phone));
+      if (ticket) res = res.filter(r=>r.number===ticket);
+      const wrap = $('#searchResults');
+      if (!res.length){ wrap.innerHTML='<div class="note">No matches found.</div>'; return; }
+      const table = el('table',{}); const thead = el('thead',{}, el('tr',{}, el('th',{},'Receipt #'), el('th',{},'Customer'), el('th',{},'Phone'), el('th',{},'Ticket'), el('th',{},'Sem'), el('th',{},'Amount'), el('th',{},'Open')));
+      const tbody = el('tbody',{}, ...res.map(r=> el('tr',{}, el('td',{},r.id), el('td',{},r.name), el('td',{},r.phone), el('td',{},r.number), el('td',{},`${r.sem} Sem`), el('td',{},`₹ ${r.amount}`), el('td',{}, el('a',{href:`${location.origin}${location.pathname}#${'/receipt/'+r.id}`},'Open')) )));
+      table.append(thead, tbody); wrap.innerHTML=''; wrap.append(table);
+    });
+    $('#btnClearSearch').addEventListener('click', ()=>{ $('#searchPhone').value=''; $('#searchTicket').value=''; $('#searchResults').innerHTML=''; });
+
+    const renderSettings = () => {
+      $('#price5').value = app.settings.prices[5]; $('#price10').value = app.settings.prices[10];
+      $('#price25').value = app.settings.prices[25]; $('#price50').value = app.settings.prices[50];
+      $('#price100').value = app.settings.prices[100]; $('#price200').value = app.settings.prices[200];
+      $('#smsEnabled').value = String(app.settings.smsEnabled); $('#clockOffset').value = app.settings.clockOffset;
+    };
+    $('#btnSaveSettings').addEventListener('click', ()=>{
+      app.settings.prices[5]=parseFloat($('#price5').value||'0');
+      app.settings.prices[10]=parseFloat($('#price10').value||'0');
+      app.settings.prices[25]=parseFloat($('#price25').value||'0');
+      app.settings.prices[50]=parseFloat($('#price50').value||'0');
+      app.settings.prices[100]=parseFloat($('#price100').value||'0');
+      app.settings.prices[200]=parseFloat($('#price200').value||'0');
+      app.settings.smsEnabled = $('#smsEnabled').value==='true';
+      app.settings.clockOffset = $('#clockOffset').value.trim()||'+00:00';
+      clockOffsetMs = parseOffset(app.settings.clockOffset);
+      store.save(app); toast('Settings saved.');
+    });
+    $('#btnResetApp').addEventListener('click', ()=>{
+      if (!confirm('Reset all data?')) return;
+      localStorage.removeItem('lottery-app'); app = store.load(); setTab('dashboard'); toast('App data reset.');
+    });
+
+    const render = (tab) => {
+      renderSessions();
+      if (tab==='booking') renderBooking();
+      if (tab==='receipts') renderReceipts();
+      if (tab==='reports') renderReports();
+      if (tab==='settings') renderSettings();
+    };
+
+    setTab('dashboard');
+  </script>
+</body>
+</html>
